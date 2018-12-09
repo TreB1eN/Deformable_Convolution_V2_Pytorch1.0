@@ -1,0 +1,7 @@
+modulated_deform_conv_cuda.cpp
+modulated_deform_conv_cuda_kernel.cu
+setup.py
+modulated_deform_conv_cuda.egg-info/PKG-INFO
+modulated_deform_conv_cuda.egg-info/SOURCES.txt
+modulated_deform_conv_cuda.egg-info/dependency_links.txt
+modulated_deform_conv_cuda.egg-info/top_level.txt
