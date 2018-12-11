@@ -49,10 +49,10 @@ __global__ void DeformablePSROIPoolForwardKernel(
   const float spatial_scale,
   const int channels,
   const int height, const int width, 
-  const int pooled_height, const int pooled_width, # = roi_size
+  const int pooled_height, const int pooled_width,
   const float* bottom_rois, const float* bottom_trans,
   const bool no_trans,
-  const float trans_std, l
+  const float trans_std,
   const int sample_per_part,
   const int output_dim,
   const int group_size,
@@ -138,7 +138,7 @@ __global__ void DeformablePSROIPoolForwardKernel(
     }
   }
 
-  inline void DeformablePSROIPoolForward(
+  int DeformablePSROIPoolForwardLaucher(
           // bottom_data : [batch, channels, heighy, width]
       // bottom_rois : [num_rois, 5]
       // bottom_trans : [num_rois, 2, roi_size, roi_size]
@@ -167,10 +167,13 @@ __global__ void DeformablePSROIPoolForwardKernel(
     const int num_classes = no_trans ? 1 : bottom_trans.size(1) / 2;
     const int channels_each_class = no_trans ? output_dim : output_dim / num_classes;
     
-    DeformablePSROIPoolForwardKernel<float><<<GET_BLOCKS(count), CUDA_NUM_THREADS>>>(
-      count, bottom_data, spatial_scale, channels, height, width, pooled_height, pooled_width,
-      bottom_rois, bottom_trans, no_trans, trans_std, sample_per_part, output_dim,
-      group_size, part_size, num_classes, channels_each_class, top_data, top_count_data);
+    DeformablePSROIPoolForwardKernel<<<GET_BLOCKS(count), CUDA_NUM_THREADS>>>(
+                  count, bottom_data.data<float>(), spatial_scale, channels, height, 
+                  width, pooled_height, pooled_width,
+                  bottom_rois.data<float>(), bottom_trans.data<float>(), 
+                  no_trans, trans_std, sample_per_part, output_dim,
+                  group_size, part_size, num_classes, channels_each_class, 
+                  top_data.data<float>(), top_count_data.data<float>());
     
     cudaError_t err = cudaGetLastError();
     if (cudaSuccess != err) {
@@ -314,7 +317,7 @@ __global__ void DeformablePSROIPoolForwardKernel(
     }
   }
 
-  inline void DeformablePSROIPoolBackwardAcc(
+  int DeformablePSROIPoolBackwardAccLaucher(
     at::Tensor bottom_data_diff,
     at::Tensor bottom_trans_diff,
     at::Tensor top_diff,
@@ -349,11 +352,14 @@ __global__ void DeformablePSROIPoolForwardKernel(
     const int num_classes = no_trans ? 1 : bottom_trans_diff.size(1) / 2;
     const int channels_each_class = no_trans ? output_dim : output_dim / num_classes;
 
-    DeformablePSROIPoolBackwardAccKernel<float><<<GET_BLOCKS(count), CUDA_NUM_THREADS>>>(
-      count, top_diff, top_count_data, num_rois, spatial_scale, channels, height, width,
-      pooled_height, pooled_width, output_dim, bottom_data_diff, bottom_trans_diff,
-      bottom_data, bottom_rois, bottom_trans, no_trans, trans_std, sample_per_part,
-      group_size, part_size, num_classes, channels_each_class);
+    DeformablePSROIPoolBackwardAccKernel<<<GET_BLOCKS(count), CUDA_NUM_THREADS>>>(
+                count, top_diff.data<float>(), top_count_data.data<float>(), 
+                num_rois, spatial_scale, channels, height, width,
+                pooled_height, pooled_width, output_dim, 
+                bottom_data_diff.data<float>(), bottom_trans_diff.data<float>(),
+                bottom_data.data<float>(), bottom_rois.data<float>(), bottom_trans.data<float>(), 
+                no_trans, trans_std, sample_per_part,
+                group_size, part_size, num_classes, channels_each_class);
 
     cudaError_t err = cudaGetLastError();
     if (cudaSuccess != err) {
