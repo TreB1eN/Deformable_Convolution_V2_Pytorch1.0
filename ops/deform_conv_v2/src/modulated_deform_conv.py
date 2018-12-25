@@ -9,6 +9,18 @@ from torch.nn import init
 class DeformConvV2(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=(1,1), padding=(0,0), dilation=(1,1), deformable_groups=1, use_bias=False):
         super(DeformConvV2, self).__init__()
+        if type(kernel_size) == int:
+            kernel_size = [kernel_size, kernel_size]
+        if type(stride) == int:
+            stride = [stride, stride]
+        if type(padding) == int:
+            padding = [padding, padding]
+        if type(dilation) == int:
+            dilation = [dilation, dilation]
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.dilation = dilation
         self.weight = nn.Parameter(torch.Tensor(out_channels, in_channels * kernel_size[0] * kernel_size[1]))
         if use_bias:
             self.use_bias = True

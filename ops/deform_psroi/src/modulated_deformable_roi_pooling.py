@@ -10,7 +10,7 @@ class Flatten(nn.Module):
         return input.view(input.size(0), -1)
 
 class ModulatedDeformablePSRoIPooling(nn.Module):
-    def __init__(self, imfeat_dim, deform_fc_dim, spatial_scale, pooled_size, sampling_ratio, trans_std):
+    def __init__(self, imfeat_dim, deform_fc_dim, spatial_scale, pooled_size, sampling_ratio, trans_std=0.1):
         super(ModulatedDeformablePSRoIPooling, self).__init__()
         self.spatial_scale = spatial_scale
         self.pooled_size = pooled_size
