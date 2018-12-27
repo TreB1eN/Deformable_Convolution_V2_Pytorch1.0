@@ -1,10 +1,13 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import torch
+from torch import nn
 from modeling import registry
 from .box_head.box_head import build_roi_box_head
 from .mask_head.mask_head import build_roi_mask_head
 from layers import Conv2d
 import torch.nn.functional as F
+from layers import Conv2d
+from layers import ConvTranspose2d
 
 @registry.COMBINED_ROI_HEADS.register("CombinedROIHeads")
 class CombinedROIHeads(torch.nn.ModuleDict):
@@ -52,6 +55,15 @@ class DeformableCombinedROIHeads(torch.nn.ModuleDict):
         feature_channels = cfg.MODEL.BACKBONE.C5_CHANNELS
         channels_before_Pooling = cfg.MODEL.ROI_BOX_HEAD.CHANNELS_BEFORE_POOLING
         self.conv = Conv2d(feature_channels, channels_before_Pooling, 1)
+    
+    def reset_parameters(self):
+        for module in self.parameters():
+            if isinstance(module, Conv2d) or isinstance(module, ConvTranspose2d):
+                # Caffe2 implementation uses XavierFill, which in fact
+                # corresponds to kaiming_uniform_ in PyTorch
+                nn.init.kaiming_uniform_(module.weight, a=1)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
 
     def forward(self, features, proposals, targets=None):
         losses = {}
@@ -70,7 +82,7 @@ class DeformableCombinedROIHeads(torch.nn.ModuleDict):
                 mask_features = box_pooled_feature
             # During training, self.box() will return the unaltered proposals as "detections"
             # this makes the API consistent during training and testing
-            mask_features, box_mimicking_feature, detections, loss_mask = self.mask(mask_features, box_mimicking_feature, detections, targets)
+            mask_features, box_mimicking_feature, detections, _, loss_mask = self.mask(mask_features, box_mimicking_feature, detections, targets)
             losses.update(loss_mask)
         return mask_features, box_mimicking_feature, detections, losses
 

@@ -2,27 +2,38 @@ import torch
 from torch.nn.functional import interpolate
 from structures.bounding_box import BoxList
 from torch import nn
+from torch.nn import functional as F
 
 class Mimicking_head(nn.Module):
-    def __init__(self, backbone, roi_heads):
+    def __init__(self, cfg, backbone, roi_heads):
         super(Mimicking_head, self).__init__()
+        self.weight_cos = cfg.FEATURE_MIMICKING.WEIGHT_COSINE
+        self.weight_cls = cfg.FEATURE_MIMICKING.WEIGHT_CLS
+        self.samples_per_img = cfg.FEATURE_MIMICKING.SAMPLES_PER_IMG
+        self.resize = cfg.FEATURE_MIMICKING.RESIZE
         self.backbone = backbone
         self.conv = roi_heads.conv
         self.box = roi_heads.box
         cls_num = roi_heads.box.predictor.cls_score.weight.size(0)
         feature_dim = roi_heads.box.predictor.cls_score.weight.size(1)
-        self.mimicking_cls_score = nn.Linear(feature_dim, cls_num)
+        self.mimicking_cls_score = nn.Linear(feature_dim, cls_num).to(self.box.predictor.linear1.weight.device)
         nn.init.normal_(self.mimicking_cls_score.weight, mean=0, std=0.01)
         nn.init.constant_(self.mimicking_cls_score.bias, 0)
-    def forward(self, x):
-        _, x = self.backbone(x)
+    def forward(self, images, detections, box_mimicking_feature):
+        resized_imgs, mimicking_labels, mimicking_ids = mimicking_gen(images, detections, self.samples_per_img, self.resize)
+        box_mimicking_feature = box_mimicking_feature[mimicking_ids]
+        _, x = self.backbone(resized_imgs)
         x = self.conv(x)
         mimicking_proposals = construct_mm_proposals(x)
         x = self.box.feature_extractor(x, mimicking_proposals)
         x = self.box.predictor.linear1(x.view(x.size(0), -1))
         x = self.box.predictor.linear2(x)
         cls_logits = self.mimicking_cls_score(x)
-        return x, cls_logits
+        loss_mimicking_cls = F.cross_entropy(cls_logits, mimicking_labels)
+        loss_mimicking_cos_sim = F.cosine_embedding_loss(box_mimicking_feature, x, torch.ones([len(x)], device=x.device))
+        loss_mimicking_cls *= self.weight_cls
+        loss_mimicking_cos_sim *= self.weight_cos
+        return dict(loss_mimicking_cls=loss_mimicking_cls, loss_mimicking_cos_sim=loss_mimicking_cos_sim)
 
 def samples_2_inputs(img, mimicking_samples, resize):
     bbox = mimicking_samples.bbox.to(torch.int32)

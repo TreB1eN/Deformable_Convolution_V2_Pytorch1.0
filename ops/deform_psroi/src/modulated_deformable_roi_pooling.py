@@ -30,15 +30,16 @@ class ModulatedDeformablePSRoIPooling(nn.Module):
                                                         self.spatial_scale, 
                                                         self.pooled_size, 
                                                         self.sampling_ratio, 
-                                                        self.trans_std)       
+                                                        self.trans_std)
+        self.reset_parameters()       
 
     def reset_parameters(self):
-        init.constant_(self.linear_deform_1.weight, 0)
-        init.constant_(self.linear_deform_2.weight, 0)
-        init.constant_(self.linear_deform_3.weight, 0)
-        init.constant_(self.linear_deform_1.bias, 0)
-        init.constant_(self.linear_deform_2.bias, 0)
-        init.constant_(self.linear_deform_3.bias, 0)
+        nn.init.constant_(self.linear_deform_1.weight, 0)
+        nn.init.constant_(self.linear_deform_2.weight, 0)
+        nn.init.constant_(self.linear_deform_3.weight, 0)
+        nn.init.constant_(self.linear_deform_1.bias, 0)
+        nn.init.constant_(self.linear_deform_2.bias, 0)
+        nn.init.constant_(self.linear_deform_3.bias, 0)
 
     def forward(self, bottom_data, bottom_rois):
         roi_align = self.roi_align(bottom_data, bottom_rois)

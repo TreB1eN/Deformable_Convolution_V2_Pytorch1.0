@@ -61,21 +61,24 @@ class ROIMaskHead(torch.nn.Module):
         if self.training:
             # during training, only focus on positive boxes
             all_proposals = proposals
-            positive_proposals, positive_inds = keep_only_positive_boxes(all_proposals)
+            proposals, positive_inds = keep_only_positive_boxes(proposals)
             box_mimicking_feature = box_mimicking_feature[torch.cat(positive_inds, dim=0)]
         if self.training and self.cfg.MODEL.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
             mask_features = features
             mask_features = mask_features[torch.cat(positive_inds, dim=0)]
         else:
-            mask_features = self.feature_extractor(features, positive_proposals)
+            if any([len(detection) for detection in proposals]):
+                mask_features = self.feature_extractor(features, proposals)
+            else:
+                return features, box_mimicking_feature, proposals, proposals, {}
         mask_logits = self.predictor(mask_features)
 
         if not self.training:
-            result = self.post_processor(mask_logits, positive_proposals)
-            return x, result, {}
+            result = self.post_processor(mask_logits, proposals)
+            return mask_features, result, {}
 
-        loss_mask = self.loss_evaluator(positive_proposals, mask_logits, targets)
-        return mask_features, box_mimicking_feature, positive_proposals, dict(loss_mask=loss_mask)
+        loss_mask = self.loss_evaluator(proposals, mask_logits, targets)
+        return mask_features, box_mimicking_feature, proposals, all_proposals, dict(loss_mask=loss_mask)
 
 
 def build_roi_mask_head(cfg):

@@ -270,6 +270,17 @@ class DeformConvBottleneckWithGroupNorm(nn.Module):
         )
         self.gn3 = GroupNorm(Global_Group_Num, out_channels)
 
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        for module in self.parameters():
+            if isinstance(module, Conv2d):
+                # Caffe2 implementation uses XavierFill, which in fact
+                # corresponds to kaiming_uniform_ in PyTorch
+                nn.init.kaiming_uniform_(module.weight, a=1)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+
     def forward(self, x):
         residual = x
 
