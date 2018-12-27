@@ -169,12 +169,13 @@ class Predictor(object):
         predictions = self.compute_prediction(image)
         top_predictions = self.select_top_predictions(predictions)
 
-        result = image.copy()
+        result = image.copy()[:, :, [2,1,0]]
         if self.show_mask_heatmaps:
             return self.create_mask_montage(result, top_predictions)
         result = self.overlay_boxes(result, top_predictions)
         if self.cfg.MODEL.MASK_ON:
-            result = self.overlay_mask(result, top_predictions)
+            if 'mask' in top_predictions.fields():
+                result = self.overlay_mask(result, top_predictions)
         result = self.overlay_class_names(result, top_predictions)
 
         return result
@@ -204,7 +205,7 @@ class Predictor(object):
         image = self.transforms(original_image)
         # convert to an ImageList, padded so that it is divisible by
         # cfg.DATALOADER.SIZE_DIVISIBILITY
-        image_list = to_image_list(image, self.cfg.DATALOADER.SIZE_DIVISIBILITY)
+        image_list = to_image_list(image.unsqueeze(0), self.cfg.DATALOADER.SIZE_DIVISIBILITY)
         image_list = image_list.to(self.device)
         # compute predictions
         with torch.no_grad():
