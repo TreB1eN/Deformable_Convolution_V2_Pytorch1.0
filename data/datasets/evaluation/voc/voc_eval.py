@@ -5,8 +5,8 @@ from __future__ import division
 import os
 from collections import defaultdict
 import numpy as np
-from maskrcnn_benchmark.structures.bounding_box import BoxList
-from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from structures.bounding_box import BoxList
+from structures.boxlist_ops import boxlist_iou
 
 
 def do_voc_evaluation(dataset, predictions, output_folder, logger):

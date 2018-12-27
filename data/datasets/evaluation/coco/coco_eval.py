@@ -5,9 +5,9 @@ import torch
 from collections import OrderedDict
 from tqdm import tqdm
 
-from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
-from maskrcnn_benchmark.structures.bounding_box import BoxList
-from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from modeling.roi_heads.mask_head.inference import Masker
+from structures.bounding_box import BoxList
+from structures.boxlist_ops import boxlist_iou
 
 
 def do_coco_evaluation(
