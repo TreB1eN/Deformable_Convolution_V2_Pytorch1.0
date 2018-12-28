@@ -1,6 +1,6 @@
-from config import cfg
-cfg.merge_from_file('configs/e2e_deformconv_mask_rcnn_R_50_C5_1x.yaml')
-cfg.freeze()
+# from config import cfg
+# cfg.merge_from_file('configs/e2e_deformconv_mask_rcnn_R_50_C5_1x.yaml')
+# cfg.freeze()
 
 from modeling.detectors.deconv_rcnn import DeformConvRCNN
 from modeling.detectors.predictor import Predictor
@@ -199,7 +199,6 @@ class Learner(object):
         running_loss_rpn_box_reg = 0.
         running_loss_mimicking_cls = 0.
         running_loss_mimicking_cos_sim = 0.
-        val_loss = None
         
         start_step = self.step
         for _, (images, targets, _) in tqdm(enumerate(self.train_loader, start_step)):
