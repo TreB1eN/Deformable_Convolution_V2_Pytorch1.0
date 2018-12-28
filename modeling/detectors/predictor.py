@@ -98,13 +98,14 @@ class Predictor(object):
     def __init__(
         self,
         cfg,
+        model,
         confidence_threshold=0.7,
         show_mask_heatmaps=False,
         masks_per_dim=2,
         min_image_size=224,
     ):
         self.cfg = cfg.clone()
-        self.model = DeformConvRCNN(cfg)
+        self.model = model
         self.model.eval()
         self.device = torch.device(cfg.MODEL.DEVICE)
         self.model.to(self.device)

@@ -117,8 +117,8 @@ class DeformableRoIPoolingFunction(Function):
             bottom_trans_diff = torch.zeros([num_rois, 2, ctx.pooled_size, ctx.pooled_size], dtype=torch.float32).to(top_diff.device)
             modulated_deform_psroi_cuda.backward(bottom_data_diff, bottom_trans_diff,
                                                 top_diff.contiguous(), 
-                                                bottom_data, bottom_rois,
-                                                bottom_trans, top_count, ctx.no_trans, 
+                                                bottom_data.contiguous(), bottom_rois.contiguous(),
+                                                bottom_trans.contiguous(), top_count, ctx.no_trans, 
                                                 ctx.spatial_scale, output_dim,
                                                 group_size, ctx.pooled_size, part_size,
                                                 ctx.sampling_ratio, ctx.trans_std)

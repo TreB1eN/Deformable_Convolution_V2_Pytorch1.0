@@ -9,6 +9,8 @@ MODEL:
   BACKBONE:
     CONV_BODY: "Deform-R-50-C5"
     C5_CHANNELS: 2048
+    PRETRAINED_STEM_WEIGHTS: 'modeling/pretrained_weights/stem.pth'
+    PRETRAINED_LAYER1_WEIGHTS: 'modeling/pretrained_weights/layer1.pth'     
   RESNETS:
     DEFORM_TRANS_FUNC: "DeformConvBottleneckWithGroupNorm"
   RPN:
@@ -44,8 +46,13 @@ DATASETS:
 SOLVER:
   BASE_LR: 0.01
   WEIGHT_DECAY: 0.0001
-  STEPS: (120000, 160000)
-  MAX_ITER: 180000
-  IMS_PER_BATCH: 2
+  STEPS: (960000, 1280000)
+  MAX_ITER: 1440000
+  IMS_PER_BATCH: 1
+  EVAL_NUM: 300
 TEST:
   IMS_PER_BATCH: 3
+  CONF_THRES: 0.7
+  MIN_IMG_SIZE: 800
+WRITER_DIR: 'workspace/log'
+WORKSPACE: 'workspace'
