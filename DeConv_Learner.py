@@ -2,6 +2,8 @@
 # cfg.merge_from_file('configs/e2e_deformconv_mask_rcnn_R_50_C5_1x.yaml')
 # cfg.freeze()
 
+import pdb
+
 from modeling.detectors.deconv_rcnn import DeformConvRCNN
 from modeling.detectors.predictor import Predictor
 from engine.inference import inference
@@ -13,7 +15,8 @@ from torchvision.transforms import functional as F
 import datetime
 def get_time():
     return (str(datetime.datetime.now())[:-10]).replace(' ','-').replace(':','-')
-import logging
+from utils.logger import setup_logger
+from utils.collect_env import collect_env_info
 import time
 import os
 from tensorboardX import SummaryWriter
@@ -29,6 +32,12 @@ import cv2
 class Learner(object):
     def __init__(self, cfg):
         self.cfg = cfg.clone()
+        num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
+        self.logger = setup_logger("deformconv RCNN", 'workspace/logger', 0)
+        self.logger.info("Using {} GPUs".format(num_gpus))
+        self.logger.info("Collecting env info (might take some time)")
+        self.logger.info("\n" + collect_env_info())
+        self.logger.info("Running with config:\n{}".format(cfg))
         self.device = torch.device(cfg.MODEL.DEVICE)
         self.model = DeformConvRCNN(cfg).to(self.device)
         [*self.model.backbone.modules()][1].stem.load_state_dict(torch.load(cfg.MODEL.BACKBONE.PRETRAINED_STEM_WEIGHTS))
@@ -37,7 +46,6 @@ class Learner(object):
         self.val_loader = make_data_loader(cfg, is_train=False)[0]
         remove_empty_target(self.val_loader.dataset)
         self.optimizer = make_optimizer(cfg, self.model)
-        self.logger = logging.getLogger("Deform_Conv_RCNN.trainer")
         self.writer = SummaryWriter(cfg.WRITER_DIR)
         self.predictor = Predictor(cfg, self.model, 
                                    confidence_threshold=cfg.TEST.CONF_THRES, 
@@ -52,11 +60,11 @@ class Learner(object):
         self.inference_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // 1
         
         # test only
-        self.board_loss_every = 10
-        self.evaluate_every = 10
-        self.save_every = 10
-        self.board_pred_image_every = 10
-        self.inference_every = 10
+#         self.board_loss_every = 10
+#         self.evaluate_every = 10
+#         self.save_every = 10
+#         self.board_pred_image_every = 10
+#         self.inference_every = 10
         # test only
     
     def schedule_lr(self):
@@ -66,7 +74,8 @@ class Learner(object):
                 params['lr'] /= 10
             print(self.optimizer)
     
-    def evaluate(self, num=None):  
+    def evaluate(self, num=None):
+        self.val_loader = make_data_loader(self.cfg, is_train=False)[0]
         running_loss = 0.
         running_loss_classifier = 0.
         running_loss_box_reg = 0.
@@ -270,6 +279,7 @@ class Learner(object):
                     running_loss_mimicking_cos_sim = 0.
                 
                 if self.step % self.evaluate_every == 0:
+                    self.model.train() 
                     val_loss, val_loss_classifier, \
                     val_loss_box_reg, \
                     val_loss_mask, \
@@ -277,7 +287,6 @@ class Learner(object):
                     val_loss_rpn_box_reg, \
                     val_loss_mimicking_cls, \
                     val_loss_mimicking_cos_sim= self.evaluate(num = self.cfg.SOLVER.EVAL_NUM)
-                    self.model.train() 
                     self.board_scalars('val', 
                                         val_loss, 
                                         val_loss_classifier.item(), 
@@ -298,35 +307,35 @@ class Learner(object):
                     self.model.train()
                 
                 if self.step % self.inference_every == 0:
-                        try:
-                            self.model.eval()
-                            with torch.no_grad():
-                                cocoEval = inference(self.model, self.val_loader, 'coco2014', iou_types=['bbox', 'segm'])[0]
-                            self.model.train()
+                    self.model.eval()
+                    try:
+                        with torch.no_grad():
+                            cocoEval = inference(self.model, self.val_loader, 'coco2014', iou_types=['bbox', 'segm'])[0]
                             bbox_map05 = cocoEval.results['bbox']['AP50']
                             bbox_mmap = cocoEval.results['bbox']['AP']
                             segm_map05 = cocoEval.results['segm']['AP50']
                             segm_mmap = cocoEval.results['segm']['AP']
-                        except:
-                            print('eval on coco failed')
-                            bbox_map05 = -1
-                            bbox_mmap = -1
-                            segm_map05 = -1
-                            segm_mmap = -1
-                        self.writer.add_scalar('bbox_map05', bbox_map05, self.step)
-                        self.writer.add_scalar('bbox_mmap', bbox_mmap, self.step)
-                        self.writer.add_scalar('segm_map05', segm_map05, self.step)
-                        self.writer.add_scalar('segm_mmap', segm_mmap, self.step)
+                    except:
+                        print('eval on coco failed')
+                        bbox_map05 = -1
+                        bbox_mmap = -1
+                        segm_map05 = -1
+                        segm_mmap = -1
+                    self.model.train()
+                    self.writer.add_scalar('bbox_map05', bbox_map05, self.step)
+                    self.writer.add_scalar('bbox_mmap', bbox_mmap, self.step)
+                    self.writer.add_scalar('segm_map05', segm_map05, self.step)
+                    self.writer.add_scalar('segm_mmap', segm_mmap, self.step)
                 
                 if self.step % self.save_every == 0:
-                        try:
-                            self.save_state(val_loss, bbox_mmap, segm_mmap)
-                            if self.step % (10 * self.save_every) == 0:
-                                self.save_state(val_loss, bbox_mmap, segm_mmap, to_save_folder=True)
-                        except:
-                            print('save state failed')
-                            self.step += 1
-                            continue
+                    try:
+                        self.save_state(val_loss, bbox_mmap, segm_mmap)
+                        if self.step % (10 * self.save_every) == 0:
+                            self.save_state(val_loss, bbox_mmap, segm_mmap, to_save_folder=True)
+                    except:
+                        print('save state failed')
+                        self.step += 1
+                        continue
             
             batch_time = time.time() - end
             end = time.time()

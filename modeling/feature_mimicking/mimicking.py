@@ -35,16 +35,25 @@ class Mimicking_head(nn.Module):
         loss_mimicking_cos_sim *= self.weight_cos
         return dict(loss_mimicking_cls=loss_mimicking_cls, loss_mimicking_cos_sim=loss_mimicking_cos_sim)
 
-def samples_2_inputs(img, mimicking_samples, resize):
+def samples_2_inputs(img, mimicking_samples, all_ids, resize):
     bbox = mimicking_samples.bbox.to(torch.int32)
     xmin, ymin, xmax, ymax = bbox.split(1, dim=-1)
     resized_imgs = []
+    labels = mimicking_samples.get_field('labels')
+    new_labels = []
+    new_ids = []
     for i in range(len(mimicking_samples)):
         x1,y1,x2,y2 = xmin[i], ymin[i], xmax[i], ymax[i]
+        label = labels[i]
+        id_ = all_ids[i]
+        if (x2 - x1).abs().item() <= 16 or (y2 - y1).abs().item() <= 16:
+            continue
         sub_img = img[:, :, y1:y2, x1:x2]
         resized_sub_img = interpolate(sub_img, [resize, resize], mode='bilinear')
         resized_imgs.append(resized_sub_img)
-    return torch.cat(resized_imgs, dim=0), mimicking_samples.get_field('labels')
+        new_labels.append(label.item())
+        new_ids.append(id_)
+    return torch.cat(resized_imgs, dim=0), torch.tensor(new_labels, dtype=torch.int64, device=xmin.device), new_ids
 
 def mimicking_gen(images, detections, samples_per_img, resize):
     assert len(images.tensors) == len(detections), 'imgs and detections number mismatch !'
@@ -53,8 +62,8 @@ def mimicking_gen(images, detections, samples_per_img, resize):
     ids = []
     for i in range(len(detections)):
         img = images.tensors[i].unsqueeze(0)
-        mimicking_samples, ids_ = detections[i].random_sample(samples_per_img)
-        resized_imgs_, labels_ = samples_2_inputs(img, mimicking_samples, resize)
+        mimicking_samples, all_ids = detections[i].random_sample(samples_per_img)
+        resized_imgs_, labels_, ids_ = samples_2_inputs(img, mimicking_samples, all_ids, resize)
         resized_imgs.append(resized_imgs_)
         labels.append(labels_)
         ids.append(ids_)

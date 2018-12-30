@@ -1,6 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import cv2
 import torch
+import numpy as np
 from torchvision import transforms as T
 
 from modeling.detectors.deconv_rcnn import DeformConvRCNN
@@ -275,10 +276,8 @@ class Predictor(object):
         for box, color in zip(boxes, colors):
             box = box.to(torch.int64)
             top_left, bottom_right = box[:2].tolist(), box[2:].tolist()
-            image = cv2.rectangle(
-                image, tuple(top_left), tuple(bottom_right), tuple(color), 1
-            )
-
+            image = cv2.rectangle(np.ascontiguousarray(image, dtype=np.uint8), 
+                                  tuple(top_left), tuple(bottom_right), tuple(color), 1)
         return image
 
     def overlay_mask(self, image, predictions):
