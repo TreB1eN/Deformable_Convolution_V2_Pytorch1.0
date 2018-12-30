@@ -47,6 +47,14 @@ class Learner(object):
         self.save_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // 5
         self.board_pred_image_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // 5
         self.inference_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // 1
+        
+        # test only
+        self.board_loss_every = 10
+        self.evaluate_every = 10
+        self.save_every = 10
+        self.board_pred_image_every = 10
+        self.inference_every = 10
+        # test only
     
     def schedule_lr(self):
         if self.step in self.milestones:
@@ -55,8 +63,8 @@ class Learner(object):
                 params['lr'] /= 10
             print(self.optimizer)
     
-    def evaluate(self, num=None):
-        self.eval()        
+    def evaluate(self, num=None):  
+        running_loss = 0.
         running_loss_classifier = 0.
         running_loss_box_reg = 0.
         running_loss_mask = 0.
@@ -72,9 +80,9 @@ class Learner(object):
         with torch.no_grad():
             counts = 0
             for images, targets, _ in tqdm(iter(self.val_loader)):
-                images = images.to(device)
-                targets = [target.to(device) for target in targets]
-                loss_dict = model(images, targets)
+                images = images.to(self.device)
+                targets = [target.to(self.device) for target in targets]
+                loss_dict = self.model(images, targets)
                 losses = sum(loss for loss in loss_dict.values())
                 running_loss += losses.item()
                 running_loss_classifier += loss_dict['loss_classifier']
@@ -183,8 +191,10 @@ class Learner(object):
         self.writer.add_scalar('{}_loss_mimicking_cls'.format(key), loss_mimicking_cls, self.step)
         self.writer.add_scalar('{}_loss_mimicking_cos_sim'.format(key), loss_mimicking_cos_sim, self.step)
     
-    def train(self):
-        logger.info("Start training")
+    def train(self, resume = False, from_save_folder = False):
+        if resume:
+            self.resume_training_load(from_save_folder)
+        self.logger.info("Start training")
         meters = MetricLogger(delimiter="  ")
         max_iter = len(self.train_loader)
         
@@ -192,6 +202,7 @@ class Learner(object):
         start_training_time = time.time()
         end = time.time()
         
+        running_loss = 0.
         running_loss_classifier = 0.
         running_loss_box_reg = 0.
         running_loss_mask = 0.
@@ -206,16 +217,16 @@ class Learner(object):
             self.step += 1
             self.schedule_lr()
 
-            images = images.to(device)
-            targets = [target.to(device) for target in targets]
+            images = images.to(self.device)
+            targets = [target.to(self.device) for target in targets]
 
-            loss_dict = model(images, targets)
+            loss_dict = self.model(images, targets)
 
             losses = sum(loss for loss in loss_dict.values())
 
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             losses.backward()
-            optimizer.step()
+            self.optimizer.step()
             
             torch.cuda.empty_cache()
             
@@ -273,7 +284,7 @@ class Learner(object):
                     for i in range(20):
                         img_path = Path(self.val_loader.dataset.root)/self.val_loader.dataset.get_img_info(1)['file_name']
                         cv_img = cv2.imread(str(img_path))
-                        predicted_img = predictor.run_on_opencv_image(cv_img)
+                        predicted_img = self.predictor.run_on_opencv_image(cv_img)
                         self.writer.add_image('pred_image_{}'.format(i), predicted_img, global_step=self.step)
                     self.model.train()
                 
@@ -281,16 +292,22 @@ class Learner(object):
                         try:
                             self.model.eval()
                             with torch.no_grad():
-                                cocoEval = inference(self.model, self.val_loader, 'coco2014', iou_types=['bbox', 'segm'])
+                                cocoEval = inference(self.model, self.val_loader, 'coco2014', iou_types=['bbox', 'segm'])[0]
                             self.model.train()
-                            map05 = cocoEval[1]
-                            mmap = cocoEval[0]
+                            bbox_map05 = cocoEval['bbox']['AP50']
+                            bbox_mmap = cocoEval['bbox']['AP']
+                            segm_map05 = cocoEval['segm']['AP50']
+                            segm_mmap = cocoEval['segm']['AP']
                         except:
                             print('eval on coco failed')
-                            map05 = -1
-                            mmap = -1
-                        self.writer.add_scalar('0.5IoU MAP', map05, self.step)
-                        self.writer.add_scalar('0.5::0.9 - MMAP', mmap, self.step)
+                            bbox_map05 = -1
+                            bbox_mmap = -1
+                            segm_map05 = -1
+                            segm_mmap = -1
+                        self.writer.add_scalar('bbox_map05', bbox_map05, self.step)
+                        self.writer.add_scalar('bbox_mmap', bbox_mmap, self.step)
+                        self.writer.add_scalar('segm_map05', segm_map05, self.step)
+                        self.writer.add_scalar('segm_mmap', segm_mmap, self.step)
             
             batch_time = time.time() - end
             end = time.time()
@@ -300,7 +317,7 @@ class Learner(object):
             eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
 
             if self.step % 20 == 0 or self.step == max_iter:
-                logger.info(
+                self.logger.info(
                     meters.delimiter.join(
                         [
                             "eta: {eta}",
@@ -313,7 +330,7 @@ class Learner(object):
                         eta=eta_string,
                         iter=self.step,
                         meters=str(meters),
-                        lr=optimizer.param_groups[0]["lr"],
+                        lr=self.optimizer.param_groups[0]["lr"],
                         memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
                     )
                 )
