@@ -4,9 +4,11 @@
 
 from modeling.detectors.deconv_rcnn import DeformConvRCNN
 from modeling.detectors.predictor import Predictor
-from engine import inference
+from engine.inference import inference
 from data.build import make_data_loader
 from solver.build import make_optimizer_DeConv as make_optimizer
+from PIL import Image
+from torchvision.transforms import functional as F
 
 import datetime
 def get_time():
@@ -33,6 +35,7 @@ class Learner(object):
         [*self.model.backbone.modules()][1].layer1.load_state_dict(torch.load(cfg.MODEL.BACKBONE.PRETRAINED_LAYER1_WEIGHTS))
         self.train_loader = make_data_loader(cfg, is_train=True)
         self.val_loader = make_data_loader(cfg, is_train=False)[0]
+        remove_empty_target(self.val_loader.dataset)
         self.optimizer = make_optimizer(cfg, self.model)
         self.logger = logging.getLogger("Deform_Conv_RCNN.trainer")
         self.writer = SummaryWriter(cfg.WRITER_DIR)
@@ -79,7 +82,7 @@ class Learner(object):
             total_num = num
         with torch.no_grad():
             counts = 0
-            for images, targets, _ in tqdm(iter(self.val_loader)):
+            for images, targets, _ in tqdm(iter(self.val_loader), total=total_num):
                 images = images.to(self.device)
                 targets = [target.to(self.device) for target in targets]
                 loss_dict = self.model(images, targets)
@@ -104,7 +107,7 @@ class Learner(object):
             running_loss_mimicking_cls / total_num, \
             running_loss_mimicking_cos_sim / total_num
     
-    def save_state(self, val_loss, mmap, to_save_folder=False, model_only=False):
+    def save_state(self, val_loss, box_mmap, seg_mmap, to_save_folder=False, model_only=False):
         if to_save_folder:
             save_path = self.workspace/'save'
         else:
@@ -112,17 +115,19 @@ class Learner(object):
         time = get_time()
         torch.save(
             self.model.state_dict(), save_path /
-            ('model_{}_val_loss:{}_mmap:{}_step:{}.pth'.format(time,
+            ('model_{}_val_loss:{}_boxmmap:{}_segmmap:{}_step:{}.pth'.format(time,
                                                                 val_loss, 
-                                                                mmap, 
+                                                                box_mmap, 
+                                                                seg_mmap,
                                                                 self.step)))
         if not model_only:
             torch.save(
                 self.optimizer.state_dict(), save_path /
-                ('optimizer_{}_val_loss:{}_mmap:{}_step:{}.pth'.format(time,
-                                                                        val_loss, 
-                                                                        mmap, 
-                                                                        self.step)))
+                ('optimizer_{}_val_loss:{}_boxmmap:{}_segmmap:{}_step:{}.pth'.format(time,
+                                                                val_loss, 
+                                                                box_mmap, 
+                                                                seg_mmap,
+                                                                self.step)))
     
     def load_state(self, fixed_str, from_save_folder=False, model_only=False):
         if from_save_folder:
@@ -199,7 +204,7 @@ class Learner(object):
         max_iter = len(self.train_loader)
         
         self.model.train()
-        start_training_time = time.time()
+        
         end = time.time()
         
         running_loss = 0.
@@ -210,6 +215,10 @@ class Learner(object):
         running_loss_rpn_box_reg = 0.
         running_loss_mimicking_cls = 0.
         running_loss_mimicking_cos_sim = 0.
+
+        val_loss = None
+        bbox_mmap = None
+        segm_mmap = None
         
         start_step = self.step
         for _, (images, targets, _) in tqdm(enumerate(self.train_loader, start_step)):
@@ -268,24 +277,24 @@ class Learner(object):
                     val_loss_rpn_box_reg, \
                     val_loss_mimicking_cls, \
                     val_loss_mimicking_cos_sim= self.evaluate(num = self.cfg.SOLVER.EVAL_NUM)
-                    self.set_training() 
+                    self.model.train() 
                     self.board_scalars('val', 
                                         val_loss, 
-                                        val_loss_classifier, 
-                                        val_loss_box_reg, 
-                                        val_loss_mask,
-                                        val_loss_objectness,
-                                        val_loss_rpn_box_reg,
-                                        val_loss_mimicking_cls,
-                                        val_loss_mimicking_cos_sim)
+                                        val_loss_classifier.item(), 
+                                        val_loss_box_reg.item(), 
+                                        val_loss_mask.item(),
+                                        val_loss_objectness.item(),
+                                        val_loss_rpn_box_reg.item(),
+                                        val_loss_mimicking_cls.item(),
+                                        val_loss_mimicking_cos_sim.item())
                     
                 if self.step % self.board_pred_image_every == 0:
                     self.model.eval()
                     for i in range(20):
-                        img_path = Path(self.val_loader.dataset.root)/self.val_loader.dataset.get_img_info(1)['file_name']
+                        img_path = Path(self.val_loader.dataset.root)/self.val_loader.dataset.get_img_info(i)['file_name']
                         cv_img = cv2.imread(str(img_path))
                         predicted_img = self.predictor.run_on_opencv_image(cv_img)
-                        self.writer.add_image('pred_image_{}'.format(i), predicted_img, global_step=self.step)
+                        self.writer.add_image('pred_image_{}'.format(i), F.to_tensor(Image.fromarray(predicted_img)), global_step=self.step)
                     self.model.train()
                 
                 if self.step % self.inference_every == 0:
@@ -294,10 +303,10 @@ class Learner(object):
                             with torch.no_grad():
                                 cocoEval = inference(self.model, self.val_loader, 'coco2014', iou_types=['bbox', 'segm'])[0]
                             self.model.train()
-                            bbox_map05 = cocoEval['bbox']['AP50']
-                            bbox_mmap = cocoEval['bbox']['AP']
-                            segm_map05 = cocoEval['segm']['AP50']
-                            segm_mmap = cocoEval['segm']['AP']
+                            bbox_map05 = cocoEval.results['bbox']['AP50']
+                            bbox_mmap = cocoEval.results['bbox']['AP']
+                            segm_map05 = cocoEval.results['segm']['AP50']
+                            segm_mmap = cocoEval.results['segm']['AP']
                         except:
                             print('eval on coco failed')
                             bbox_map05 = -1
@@ -308,6 +317,16 @@ class Learner(object):
                         self.writer.add_scalar('bbox_mmap', bbox_mmap, self.step)
                         self.writer.add_scalar('segm_map05', segm_map05, self.step)
                         self.writer.add_scalar('segm_mmap', segm_mmap, self.step)
+                
+                if self.step % self.save_every == 0:
+                        try:
+                            self.save_state(val_loss, bbox_mmap, segm_mmap)
+                            if self.step % (10 * self.save_every) == 0:
+                                self.save_state(val_loss, bbox_mmap, segm_mmap, to_save_folder=True)
+                        except:
+                            print('save state failed')
+                            self.step += 1
+                            continue
             
             batch_time = time.time() - end
             end = time.time()
@@ -335,4 +354,20 @@ class Learner(object):
                     )
                 )
             if self.step >= max_iter:
+                self.save_state(val_loss, bbox_mmap, segm_mmap, to_save_folder=True)
                 return
+            
+def remove_empty_target(dataset):
+    dataset.ids = [
+        img_id
+        for img_id in dataset.ids
+            if len(dataset.coco.getAnnIds(imgIds=img_id, iscrowd=None)) > 0
+        ]
+
+    dataset.json_category_id_to_contiguous_id = {
+        v: i + 1 for i, v in enumerate(dataset.coco.getCatIds())
+    }
+    dataset.contiguous_category_id_to_json_id = {
+        v: k for k, v in dataset.json_category_id_to_contiguous_id.items()
+    }
+    dataset.id_to_img_map = {k: v for k, v in enumerate(dataset.ids)}

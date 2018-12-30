@@ -75,7 +75,7 @@ class ROIMaskHead(torch.nn.Module):
 
         if not self.training:
             result = self.post_processor(mask_logits, proposals)
-            return mask_features, result, {}
+            return mask_features, box_mimicking_feature, result, proposals, {}
 
         loss_mask = self.loss_evaluator(proposals, mask_logits, targets)
         return mask_features, box_mimicking_feature, proposals, all_proposals, dict(loss_mask=loss_mask)
