@@ -21,6 +21,8 @@ class Mimicking_head(nn.Module):
         nn.init.constant_(self.mimicking_cls_score.bias, 0)
     def forward(self, images, detections, box_mimicking_feature):
         resized_imgs, mimicking_labels, mimicking_ids = mimicking_gen(images, detections, self.samples_per_img, self.resize)
+        if len(resized_imgs) == 0:
+            return dict(loss_mimicking_cls = 0., loss_mimicking_cos_sim = 0.)
         box_mimicking_feature = box_mimicking_feature[mimicking_ids]
         _, x = self.backbone(resized_imgs)
         x = self.conv(x)
@@ -33,7 +35,7 @@ class Mimicking_head(nn.Module):
         loss_mimicking_cos_sim = F.cosine_embedding_loss(box_mimicking_feature, x, torch.ones([len(x)], device=x.device))
         loss_mimicking_cls *= self.weight_cls
         loss_mimicking_cos_sim *= self.weight_cos
-        return dict(loss_mimicking_cls=loss_mimicking_cls, loss_mimicking_cos_sim=loss_mimicking_cos_sim)
+        return dict(loss_mimicking_cls = loss_mimicking_cls, loss_mimicking_cos_sim = loss_mimicking_cos_sim)
 
 def samples_2_inputs(img, mimicking_samples, all_ids, resize):
     bbox = mimicking_samples.bbox.to(torch.int32)
@@ -53,7 +55,10 @@ def samples_2_inputs(img, mimicking_samples, all_ids, resize):
         resized_imgs.append(resized_sub_img)
         new_labels.append(label.item())
         new_ids.append(id_)
-    return torch.cat(resized_imgs, dim=0), torch.tensor(new_labels, dtype=torch.int64, device=xmin.device), new_ids
+    if len(new_labels) != 0:
+        return torch.cat(resized_imgs, dim=0), torch.tensor(new_labels, dtype=torch.int64, device=xmin.device), new_ids
+    else:
+        return [], [], []
 
 def mimicking_gen(images, detections, samples_per_img, resize):
     assert len(images.tensors) == len(detections), 'imgs and detections number mismatch !'
@@ -64,10 +69,16 @@ def mimicking_gen(images, detections, samples_per_img, resize):
         img = images.tensors[i].unsqueeze(0)
         mimicking_samples, all_ids = detections[i].random_sample(samples_per_img)
         resized_imgs_, labels_, ids_ = samples_2_inputs(img, mimicking_samples, all_ids, resize)
-        resized_imgs.append(resized_imgs_)
-        labels.append(labels_)
-        ids.append(ids_)
-    return torch.cat(resized_imgs, dim=0), torch.cat(labels), concat_ids(ids)
+        if len(resized_imgs_) != 0:
+            resized_imgs.append(resized_imgs_)
+            labels.append(labels_)
+            ids.append(ids_)
+        else:
+            continue
+    if len(resized_imgs) != 0:
+        return torch.cat(resized_imgs, dim=0), torch.cat(labels), concat_ids(ids)
+    else:
+        return [], [], []
 
 def construct_mm_proposals(imgs):
     bbox = torch.tensor([[0., 0., imgs.shape[2], imgs.shape[3]]], 

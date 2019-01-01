@@ -48,16 +48,17 @@ class Learner(object):
         self.optimizer = make_optimizer(cfg, self.model)
         self.writer = SummaryWriter(cfg.WRITER_DIR)
         self.predictor = Predictor(cfg, self.model, 
-                                   confidence_threshold=cfg.TEST.CONF_THRES, 
+                                   confidence_threshold=cfg.SOLVER.CONF_THRES, 
                                    min_image_size=cfg.TEST.MIN_IMG_SIZE)
+        self.predictor.model.roi_heads.box.post_processor.detections_per_img = 20
         self.step = 0
         self.milestones = cfg.SOLVER.STEPS
         self.workspace = Path(cfg.WORKSPACE)
-        self.board_loss_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // 100
-        self.evaluate_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // 4
-        self.save_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // 5
-        self.board_pred_image_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // 5
-        self.inference_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // 1
+        self.board_loss_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // cfg.SOLVER.BOARD_LOSS_INTERVAL
+        self.evaluate_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // cfg.SOLVER.EVALUATE_INTERVAL
+        self.save_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // cfg.SOLVER.SAVE_INTERVAL
+        self.board_pred_image_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // cfg.SOLVER.BOARD_IMAGE_INTERVAL
+        self.inference_every = len(self.train_loader.dataset) // cfg.SOLVER.IMS_PER_BATCH // cfg.SOLVER.INFERENCE_INTERVAL
         
         # test only
 #         self.board_loss_every = 10
@@ -76,6 +77,7 @@ class Learner(object):
     
     def evaluate(self, num=None):
         self.val_loader = make_data_loader(self.cfg, is_train=False)[0]
+        remove_empty_target(self.val_loader.dataset)
         running_loss = 0.
         running_loss_classifier = 0.
         running_loss_box_reg = 0.

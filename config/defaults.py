@@ -276,6 +276,12 @@ _C.SOLVER.DECONV_LR_FACTOR = 0.1
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.SOLVER.IMS_PER_BATCH = 16
+_C.SOLVER.CONF_THRES = 0.3
+_C.SOLVER.BOARD_LOSS_INTERVAL = 100
+_C.SOLVER.EVALUATE_INTERVAL = 4
+_C.SOLVER.SAVE_INTERVAL = 10
+_C.SOLVER.BOARD_IMAGE_INTERVAL = 5
+_C.SOLVER.INFERENCE_INTERVAL = 1
 
 # ---------------------------------------------------------------------------- #
 # Specific test options

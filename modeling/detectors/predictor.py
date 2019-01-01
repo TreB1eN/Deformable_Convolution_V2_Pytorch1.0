@@ -179,7 +179,7 @@ class Predictor(object):
             if 'mask' in top_predictions.fields():
                 result = self.overlay_mask(result, top_predictions)
         result = self.overlay_class_names(result, top_predictions)
-
+        
         return result
 
     def show_preds_on_img(self, image, predictions, show_heatmaps, show_mask):
