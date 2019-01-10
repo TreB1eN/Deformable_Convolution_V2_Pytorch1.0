@@ -1,7 +1,3 @@
-# from config import cfg
-# cfg.merge_from_file('configs/e2e_deformconv_mask_rcnn_R_50_C5_1x.yaml')
-# cfg.freeze()
-
 import pdb
 
 from modeling.detectors.deconv_rcnn import DeformConvRCNN
@@ -97,6 +93,7 @@ class Learner(object):
                 images = images.to(self.device)
                 targets = [target.to(self.device) for target in targets]
                 loss_dict = self.model(images, targets)
+                loss_dict = self.weight_loss(loss_dict)
                 losses = sum(loss for loss in loss_dict.values())
                 running_loss += losses.item()
                 running_loss_classifier += loss_dict['loss_classifier']
@@ -207,6 +204,16 @@ class Learner(object):
         self.writer.add_scalar('{}_loss_mimicking_cls'.format(key), loss_mimicking_cls, self.step)
         self.writer.add_scalar('{}_loss_mimicking_cos_sim'.format(key), loss_mimicking_cos_sim, self.step)
     
+    def weight_loss(self, loss_dict):
+        loss_dict['loss_classifier'] *= self.cfg.SOLVER.BOXCLS_WEIGHT
+        loss_dict['loss_box_reg'] *= self.cfg.SOLVER.BOXREG_WEIGHT
+        loss_dict['loss_mask'] *= self.cfg.SOLVER.MASK_WEIGHT
+        loss_dict['loss_objectness'] *= self.cfg.SOLVER.RPNOBJ_WEIGHT
+        loss_dict['loss_rpn_box_reg'] *= self.cfg.SOLVER.RPNREG_WEIGHT
+        loss_dict['loss_mimicking_cls'] *= self.cfg.SOLVER.MIKCLS_WEIGHT
+        loss_dict['loss_mimicking_cos_sim'] *= self.cfg.SOLVER.MIKCOS_WEIGHT
+        return loss_dict
+
     def train(self, resume = False, from_save_folder = False):
         if resume:
             self.resume_training_load(from_save_folder)
@@ -241,6 +248,7 @@ class Learner(object):
             targets = [target.to(self.device) for target in targets]
 
             loss_dict = self.model(images, targets)
+            loss_dict = self.weight_loss(loss_dict)
 
             losses = sum(loss for loss in loss_dict.values())
 
