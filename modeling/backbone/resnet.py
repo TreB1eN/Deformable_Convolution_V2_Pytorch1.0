@@ -38,7 +38,7 @@ StageSpec = namedtuple(
 # ResNet-50 (including all stages)
 DeformResNet50StagesTo5 = tuple(
     StageSpec(index=i, block_count=c, use_deform=d, return_features=r)
-    for (i, c, d, r) in ((1, 3, False, False), (2, 4, True, False), (3, 5, True, True), (4, 3, True, True))
+    for (i, c, d, r) in ((1, 3, False, False), (2, 4, True, False), (3, 6, True, True), (4, 3, True, True))
 )
 
 ResNet50StagesTo5 = tuple(

@@ -26,7 +26,7 @@ class Mimicking_head(nn.Module):
         box_mimicking_feature = box_mimicking_feature[mimicking_ids]
         _, x = self.backbone(resized_imgs)
         x = self.conv(x)
-        mimicking_proposals = construct_mm_proposals(x)
+        mimicking_proposals = construct_mm_proposals(resized_imgs)
         x = self.box.feature_extractor(x, mimicking_proposals)
         x = self.box.predictor.linear1(x.view(x.size(0), -1))
         x = self.box.predictor.linear2(x)
