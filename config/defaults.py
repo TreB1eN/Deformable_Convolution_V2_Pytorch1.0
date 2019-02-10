@@ -289,6 +289,8 @@ _C.SOLVER.RPNOBJ_WEIGHT = 1
 _C.SOLVER.RPNREG_WEIGHT = 1
 _C.SOLVER.MIKCLS_WEIGHT = 1
 _C.SOLVER.MIKCOS_WEIGHT = 1
+_C.SOLVER.OHEM = False
+_C.SOLVER.N_OHEM_SAMPLE = 256
 
 # ---------------------------------------------------------------------------- #
 # Specific test options

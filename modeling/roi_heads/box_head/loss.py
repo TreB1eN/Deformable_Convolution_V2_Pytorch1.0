@@ -16,7 +16,7 @@ class FastRCNNLossComputation(object):
     Also supports FPN
     """
 
-    def __init__(self, proposal_matcher, fg_bg_sampler, box_coder):
+    def __init__(self, cfg, proposal_matcher, fg_bg_sampler, box_coder):
         """
         Arguments:
             proposal_matcher (Matcher)
@@ -26,6 +26,9 @@ class FastRCNNLossComputation(object):
         self.proposal_matcher = proposal_matcher
         self.fg_bg_sampler = fg_bg_sampler
         self.box_coder = box_coder
+        self.ohem = cfg.SOLVER.OHEM
+        if self.ohem:
+            self.n_ohem_sample = cfg.SOLVER.N_OHEM_SAMPLE
 
     def match_targets_to_proposals(self, proposal, target):
         match_quality_matrix = boxlist_iou(target, proposal)
@@ -134,15 +137,12 @@ class FastRCNNLossComputation(object):
             [proposal.get_field("regression_targets") for proposal in proposals], dim=0
         )
 
-        classification_loss = F.cross_entropy(class_logits, labels)
-
         # get indices that correspond to the regression targets for
         # the corresponding ground truth labels, to be used with
         # advanced indexing
         sampled_pos_inds_subset = torch.nonzero(labels > 0).squeeze(1)
         labels_pos = labels[sampled_pos_inds_subset]
         map_inds = 4 * labels_pos[:, None] + torch.tensor([0, 1, 2, 3], device=device)
-
         box_loss = smooth_l1_loss(
             box_regression[sampled_pos_inds_subset[:, None], map_inds],
             regression_targets[sampled_pos_inds_subset],
@@ -151,7 +151,22 @@ class FastRCNNLossComputation(object):
         )
         box_loss = box_loss / labels.numel()
 
-        return classification_loss, box_loss
+        if self.ohem:
+            
+            classification_loss = F.cross_entropy(class_logits, labels, reduction='none')
+
+            classification_n_sample = len(classification_loss)
+            classification_n_ohem_sample = min(self.n_ohem_sample, classification_n_sample)
+            total_classification_loss = classification_loss.detach()
+            _, indices = total_classification_loss.sort(descending=True)
+            indices = indices[:classification_n_ohem_sample]
+            final_classification_loss = torch.sum(classification_loss[indices]) / classification_n_ohem_sample
+            return final_classification_loss, box_loss
+
+        else:
+            classification_loss = F.cross_entropy(class_logits, labels)
+            return classification_loss, box_loss
+
 
 
 def make_roi_box_loss_evaluator(cfg):
@@ -168,6 +183,6 @@ def make_roi_box_loss_evaluator(cfg):
         cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE, cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION
     )
 
-    loss_evaluator = FastRCNNLossComputation(matcher, fg_bg_sampler, box_coder)
+    loss_evaluator = FastRCNNLossComputation(cfg, matcher, fg_bg_sampler, box_coder)
 
     return loss_evaluator
