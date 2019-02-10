@@ -18,9 +18,9 @@ class ModulatedDeformablePSRoIPooling(nn.Module):
         self.trans_std = trans_std
         self.relu = nn.ReLU()
         self.flatten = Flatten()
-        self.linear_deform_1 = nn.Linear(imfeat_dim * pooled_size * pooled_size, deform_fc_dim)
-        self.linear_deform_2 = nn.Linear(deform_fc_dim, deform_fc_dim)
-        self.linear_deform_3 = nn.Linear(deform_fc_dim,  pooled_size * pooled_size * 3)
+        self.linear_deform_1 = nn.Linear(imfeat_dim * pooled_size * pooled_size, deform_fc_dim, bias = True)
+        self.linear_deform_2 = nn.Linear(deform_fc_dim, deform_fc_dim, bias = True)
+        self.linear_deform_3 = nn.Linear(deform_fc_dim, pooled_size * pooled_size * 3, bias = True)
         self.roi_align = DeformablePSRoIPooling(True, 
                                                 self.spatial_scale, 
                                                 self.pooled_size, 
@@ -34,9 +34,9 @@ class ModulatedDeformablePSRoIPooling(nn.Module):
         self.reset_parameters()       
 
     def reset_parameters(self):
-        nn.init.constant_(self.linear_deform_1.weight, 0)
-        nn.init.constant_(self.linear_deform_2.weight, 0)
-        nn.init.constant_(self.linear_deform_3.weight, 0)
+        nn.init.normal_(self.linear_deform_1.weight, mean=0, std=0.01)
+        nn.init.normal_(self.linear_deform_2.weight, mean=0, std=0.01)
+        nn.init.normal_(self.linear_deform_3.weight, mean=0, std=0.001)
         nn.init.constant_(self.linear_deform_1.bias, 0)
         nn.init.constant_(self.linear_deform_2.bias, 0)
         nn.init.constant_(self.linear_deform_3.bias, 0)

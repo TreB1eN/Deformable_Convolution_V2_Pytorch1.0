@@ -243,7 +243,9 @@ class Learner(object):
             data_time = time.time() - end
             self.step += 1
             self.schedule_lr()
-
+            
+            self.optimizer.zero_grad()
+            
             images = images.to(self.device)
             targets = [target.to(self.device) for target in targets]
 
@@ -252,7 +254,7 @@ class Learner(object):
 
             losses = sum(loss for loss in loss_dict.values())
 
-            self.optimizer.zero_grad()
+            
             losses.backward()
             self.optimizer.step()
             
