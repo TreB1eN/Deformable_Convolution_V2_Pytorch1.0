@@ -32,7 +32,7 @@ class Mimicking_head(nn.Module):
         x = self.box.predictor.linear2(x)
         cls_logits = self.mimicking_cls_score(x)
         loss_mimicking_cls = F.cross_entropy(cls_logits, mimicking_labels)
-        loss_mimicking_cos_sim = F.cosine_embedding_loss(box_mimicking_feature, x, torch.ones([len(x)], device=x.device))
+        loss_mimicking_cos_sim = F.cosine_embedding_loss(box_mimicking_feature, x, torch.ones([len(x)], device=x.device), reduction='sum')
         loss_mimicking_cls *= self.weight_cls
         loss_mimicking_cos_sim *= self.weight_cos
         return dict(loss_mimicking_cls = loss_mimicking_cls, loss_mimicking_cos_sim = loss_mimicking_cos_sim)

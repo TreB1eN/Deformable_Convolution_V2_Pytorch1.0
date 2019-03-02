@@ -342,13 +342,18 @@ class Learner(object):
                 if self.step % self.save_every == 0:
                     try:
                         self.save_state(val_loss, bbox_mmap, segm_mmap)
-                        if self.step % (10 * self.save_every) == 0:
-                            self.save_state(val_loss, bbox_mmap, segm_mmap, to_save_folder=True)
                     except:
                         print('save state failed')
                         self.step += 1
                         continue
-            
+                    if self.step % (10 * self.save_every) == 0:
+                        try:
+                            self.save_state(val_loss, bbox_mmap, segm_mmap, to_save_folder=True)
+                        except:
+                            print('save state failed')
+                            self.step += 1
+                            continue
+                        
             batch_time = time.time() - end
             end = time.time()
             meters.update(time=batch_time, data=data_time)
